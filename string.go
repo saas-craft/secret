@@ -19,3 +19,7 @@ func (s String) String() string {
 func (s String) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.String())
 }
+
+func (s String) GoString() string {
+	return redacted
+}
