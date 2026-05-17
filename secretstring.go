@@ -1,6 +1,10 @@
 package secretstring
 
-import "strings"
+import (
+	"encoding/json"
+)
+
+const redacted = "[REDACTED]"
 
 type SecretString string
 
@@ -9,5 +13,9 @@ func (s SecretString) Reveal() string {
 }
 
 func (s SecretString) String() string {
-	return strings.Repeat("*", max(len(s), 1))
+	return redacted
+}
+
+func (s SecretString) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.String())
 }
