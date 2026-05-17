@@ -1,3 +1,3 @@
-module github.com/saas-craft/secretstring
+module github.com/saas-craft/secret
 
 go 1.26.3

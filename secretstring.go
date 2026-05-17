@@ -1,4 +1,4 @@
-package secretstring
+package secret
 
 import (
 	"encoding/json"
@@ -6,16 +6,16 @@ import (
 
 const redacted = "[REDACTED]"
 
-type SecretString string
+type String string
 
-func (s SecretString) Reveal() string {
+func (s String) Reveal() string {
 	return string(s)
 }
 
-func (s SecretString) String() string {
+func (s String) String() string {
 	return redacted
 }
 
-func (s SecretString) MarshalJSON() ([]byte, error) {
+func (s String) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.String())
 }
