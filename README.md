@@ -26,4 +26,4 @@ go get github.com/saas-craft/secret
 
 ## License
 
-SaaS Craft Secret is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+SaasCraft Secret is licensed under the MIT License - see [LICENSE](LICENSE) for details.
