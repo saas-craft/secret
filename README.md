@@ -1,20 +1,18 @@
 # Secret
 
-Types that defensively hide their value when rendered to text.
+A redacting wrapper that hides sensitive values from default formatting, logging, and serialization.
 
 ```go
-var refreshTokenSecret = secret.String("my-secret")
+token := secret.Redact("my-secret")
 
-fmt.Println(refreshTokenSecret)
-// Output: [REDACTED]
-
-fmt.Println(refreshTokenSecret.Reveal())
-// Output: my-secret
+fmt.Println(token)          // [REDACTED]
+fmt.Println(token.Reveal()) // my-secret
 ```
 
-Covers the Stringer, GoStringer, Formatter, TextMarshaler, json.Marshaler, BinaryMarshaler, driver.Valuer and LogValuer interfaces. Returns an ErrUseOfRedacted error when possible.
+- **Display [REDACTED]:** Stringer, GoStringer, Formatter, LogValuer
+- **Return ErrUseOfRedacted:** json.Marshaler, encoding.TextMarshaler, encoding.BinaryMarshaler, driver.Valuer
 
-**Note**: easily circumvented with a cast eg. string(refreshTokenSecret).
+**Note:** the wrapped value can only be accessed reasonably using `Reveal()`.
 
 ## Installation
 
@@ -22,9 +20,36 @@ Covers the Stringer, GoStringer, Formatter, TextMarshaler, json.Marshaler, Binar
 go get github.com/saas-craft/secret
 ```
 
-## Supported Types
+## Usage
 
-- string
+```go
+package main
+
+import (
+    "fmt"
+    "log/slog"
+
+    "github.com/saas-craft/secret"
+)
+
+type Config struct {
+    Host  string
+    Token secret.Value[string]
+}
+
+func main() {
+    cfg := Config{
+        Host:  "api.saascraft.com",
+        Token: secret.Redact("my-secret"),
+    }
+
+    fmt.Printf("%+v\n", cfg)
+    // {Host:api.saascraft.com Token:[REDACTED]}
+
+    fmt.Println("authenticating with:", cfg.Token.Reveal())
+    // authenticating with: my-secret
+}
+```
 
 ## License
 

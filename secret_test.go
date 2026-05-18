@@ -20,8 +20,28 @@ func TestReveal(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			secret := String(tc.secret)
-			result := secret.Reveal()
+			s := Redact(tc.secret)
+			result := s.Reveal()
+			if result != tc.secret {
+				t.Error("revealed secret must be the same as the original secret")
+			}
+		})
+	}
+}
+
+func TestRevealNonString(t *testing.T) {
+	tests := map[string]struct {
+		secret int
+	}{
+		"positive": {secret: 42},
+		"negative": {secret: -1},
+		"zero":     {secret: 0},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			s := Redact(tc.secret)
+			result := s.Reveal()
 			if result != tc.secret {
 				t.Error("revealed secret must be the same as the original secret")
 			}
@@ -40,10 +60,10 @@ func TestStringer(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			secret := String(tc.secret)
-			result := fmt.Sprintf("%s", secret)
+			s := Redact(tc.secret)
+			result := s.String()
 			if result != redacted {
-				t.Errorf("formatted string must equal redacted value, got %q", result)
+				t.Errorf("String() must equal redacted value, got %q", result)
 			}
 		})
 	}
@@ -60,13 +80,13 @@ func TestMarshalJSON(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			secret := String(tc.secret)
-			data, err := json.Marshal(secret)
-			if err != nil {
-				t.Fatalf("unexpected marshal error: %v", err)
+			s := Redact(tc.secret)
+			data, err := s.MarshalJSON()
+			if err != ErrUseOfRedacted {
+				t.Fatalf("expected ErrUseOfRedacted, got %v", err)
 			}
-			if string(data) != `"`+redacted+`"` {
-				t.Errorf("marshalled JSON must equal redacted value, got %s", data)
+			if data != nil {
+				t.Errorf("marshalled JSON data must be nil, got %s", data)
 			}
 		})
 	}
@@ -83,8 +103,8 @@ func TestGoStringer(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			secret := String(tc.secret)
-			result := fmt.Sprintf("%#v", secret)
+			s := Redact(tc.secret)
+			result := s.GoString()
 			if result == tc.secret {
 				t.Error("GoString must not expose the secret value")
 			}
@@ -106,13 +126,13 @@ func TestMarshalText(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			secret := String(tc.secret)
-			data, err := secret.MarshalText()
+			s := Redact(tc.secret)
+			data, err := s.MarshalText()
 			if err != ErrUseOfRedacted {
 				t.Fatalf("expected ErrUseOfRedacted, got %v", err)
 			}
-			if string(data) != redacted {
-				t.Errorf("marshalled text must equal redacted value, got %q", data)
+			if data != nil {
+				t.Errorf("marshalled text data must be nil, got %q", data)
 			}
 		})
 	}
@@ -129,13 +149,13 @@ func TestMarshalBinary(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			secret := String(tc.secret)
-			data, err := secret.MarshalBinary()
+			s := Redact(tc.secret)
+			data, err := s.MarshalBinary()
 			if err != ErrUseOfRedacted {
 				t.Fatalf("expected ErrUseOfRedacted, got %v", err)
 			}
-			if string(data) != redacted {
-				t.Errorf("marshalled binary must equal redacted value, got %q", data)
+			if data != nil {
+				t.Errorf("marshalled binary data must be nil, got %q", data)
 			}
 		})
 	}
@@ -152,17 +172,13 @@ func TestDriverValuer(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			secret := String(tc.secret)
-			val, err := secret.Value()
+			s := Redact(tc.secret)
+			val, err := s.Value()
 			if err != ErrUseOfRedacted {
 				t.Fatalf("expected ErrUseOfRedacted, got %v", err)
 			}
-			strVal, ok := val.(string)
-			if !ok {
-				t.Fatalf("expected string driver value, got %T", val)
-			}
-			if strVal != redacted {
-				t.Errorf("driver value must equal redacted value, got %q", strVal)
+			if val != nil {
+				t.Errorf("driver value must be nil, got %v", val)
 			}
 		})
 	}
@@ -179,8 +195,8 @@ func TestLogValuer(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			secret := String(tc.secret)
-			val := secret.LogValue()
+			s := Redact(tc.secret)
+			val := s.LogValue()
 			if val.String() != redacted {
 				t.Errorf("log value must equal redacted value, got %q", val.String())
 			}
@@ -202,8 +218,8 @@ func TestFormatter(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			secret := String(tc.secret)
-			result := fmt.Sprintf(tc.verb, secret)
+			s := Redact(tc.secret)
+			result := fmt.Sprintf(tc.verb, s)
 			if result != redacted {
 				t.Errorf("Formatter with verb %s must equal redacted value, got %q", tc.verb, result)
 			}
@@ -213,12 +229,12 @@ func TestFormatter(t *testing.T) {
 
 // Compile-time interface checks
 var (
-	_ fmt.Stringer             = String("")
-	_ fmt.GoStringer           = String("")
-	_ fmt.Formatter            = String("")
-	_ json.Marshaler           = String("")
-	_ encoding.TextMarshaler   = String("")
-	_ encoding.BinaryMarshaler = String("")
-	_ driver.Valuer            = String("")
-	_ slog.LogValuer           = String("")
+	_ fmt.Stringer             = Value[string]{}
+	_ fmt.GoStringer           = Value[string]{}
+	_ fmt.Formatter            = Value[string]{}
+	_ json.Marshaler           = Value[string]{}
+	_ encoding.TextMarshaler   = Value[string]{}
+	_ encoding.BinaryMarshaler = Value[string]{}
+	_ driver.Valuer            = Value[string]{}
+	_ slog.LogValuer           = Value[string]{}
 )
