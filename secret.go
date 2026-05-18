@@ -22,6 +22,9 @@ var ErrUseOfRedacted = errors.New("call Reveal() to use this value")
 // ErrUnsupportedType is returned by UnmarshalText when T is neither string nor encoding.TextUnmarshaler.
 var ErrUnsupportedType = errors.New("type cannot unmarshal from text")
 
+// ErrParseFailed is returned by UnmarshalText when the underlying type's UnmarshalText fails.
+var ErrParseFailed = errors.New("failed to parse value")
+
 // Redact returns a Value[T] that hides v from default formatting, logging, and serialization.
 func Redact[T any](v T) Value[T] {
 	return Value[T]{value: v}
@@ -75,12 +78,15 @@ func (s Value[T]) Format(f fmt.State, verb rune) {
 // UnmarshalText implements encoding.TextUnmarshaler.
 func (s *Value[T]) UnmarshalText(text []byte) error {
 	if u, ok := any(&s.value).(encoding.TextUnmarshaler); ok {
-		return u.UnmarshalText(text)
+		if err := u.UnmarshalText(text); err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		return nil
 	}
 
 	if p, ok := any(&s.value).(*string); ok {
 		*p = string(text)
-
 		return nil
 	}
 

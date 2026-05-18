@@ -229,11 +229,13 @@ func TestFormatter(t *testing.T) {
 }
 
 type stubTextUnmarshaler struct {
-	val string
+	val   string
+	count int8
 }
 
 func (u *stubTextUnmarshaler) UnmarshalText(text []byte) error {
 	u.val = string(text)
+	u.count = int8(len(text))
 	return nil
 }
 
@@ -275,22 +277,58 @@ func TestUnmarshalText(t *testing.T) {
 		if err := s.UnmarshalText([]byte("delegated")); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got := s.Reveal().val; got != "delegated" {
-			t.Errorf("Reveal().val = %q, want %q", got, "delegated")
+		got := s.Reveal()
+		if got.val != "delegated" {
+			t.Errorf("Reveal().val = %q, want %q", got.val, "delegated")
+		}
+		if got.count != int8(len("delegated")) {
+			t.Errorf("Reveal().count = %d, want %d", got.count, int8(len("delegated")))
 		}
 	})
 
-	t.Run("TextUnmarshaler error is propagated", func(t *testing.T) {
+	t.Run("TextUnmarshaler populates int8 field correctly", func(t *testing.T) {
+		tests := map[string]struct {
+			input     []byte
+			wantVal   string
+			wantCount int8
+		}{
+			"non-empty": {input: []byte("hello"), wantVal: "hello", wantCount: 5},
+			"empty":     {input: []byte{}, wantVal: "", wantCount: 0},
+			"nil":       {input: nil, wantVal: "", wantCount: 0},
+			"max int8":  {input: []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), wantVal: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", wantCount: 127},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[stubTextUnmarshaler]
+				if err := s.UnmarshalText(tc.input); err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				got := s.Reveal()
+				if got.val != tc.wantVal {
+					t.Errorf("Reveal().val = %q, want %q", got.val, tc.wantVal)
+				}
+				if got.count != tc.wantCount {
+					t.Errorf("Reveal().count = %d, want %d", got.count, tc.wantCount)
+				}
+			})
+		}
+	})
+
+	t.Run("TextUnmarshaler error is wrapped as ErrParseFailed", func(t *testing.T) {
 		var s Value[failingTextUnmarshaler]
-		if err := s.UnmarshalText([]byte("anything")); !errors.Is(err, errTextUnmarshal) {
-			t.Fatalf("expected errTextUnmarshal, got %v", err)
+		err := s.UnmarshalText([]byte("anything"))
+		if !errors.Is(err, ErrParseFailed) {
+			t.Fatalf("expected ErrParseFailed, got %v", err)
+		}
+		if errors.Is(err, errTextUnmarshal) {
+			t.Fatal("underlying error must not be exposed (would leak sensitive data)")
 		}
 	})
 
 	t.Run("TextUnmarshaler value is not mutated on error", func(t *testing.T) {
 		s := Redact(failingTextUnmarshaler{val: "original"})
-		if err := s.UnmarshalText([]byte("anything")); !errors.Is(err, errTextUnmarshal) {
-			t.Fatalf("expected errTextUnmarshal, got %v", err)
+		if err := s.UnmarshalText([]byte("anything")); !errors.Is(err, ErrParseFailed) {
+			t.Fatalf("expected ErrParseFailed, got %v", err)
 		}
 		if got := s.Reveal().val; got != "original" {
 			t.Errorf("value mutated on error path: got %q, want %q", got, "original")
