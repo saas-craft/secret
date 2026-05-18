@@ -3,6 +3,7 @@ package secret
 
 import (
 	"database/sql/driver"
+	"encoding"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -17,6 +18,9 @@ type Value[T any] struct {
 
 // ErrUseOfRedacted is returned by serialization methods; call Reveal before serializing or persisting.
 var ErrUseOfRedacted = errors.New("call Reveal() to use this value")
+
+// ErrUnsupportedType is returned by UnmarshalText when T is neither string nor encoding.TextUnmarshaler.
+var ErrUnsupportedType = errors.New("type cannot unmarshal from text")
 
 // Redact returns a Value[T] that hides v from default formatting, logging, and serialization.
 func Redact[T any](v T) Value[T] {
@@ -66,4 +70,19 @@ func (s Value[T]) LogValue() slog.Value {
 // Format implements fmt.Formatter and writes "[REDACTED]" for every verb.
 func (s Value[T]) Format(f fmt.State, verb rune) {
 	fmt.Fprint(f, redacted)
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *Value[T]) UnmarshalText(text []byte) error {
+	if u, ok := any(&s.value).(encoding.TextUnmarshaler); ok {
+		return u.UnmarshalText(text)
+	}
+
+	if p, ok := any(&s.value).(*string); ok {
+		*p = string(text)
+
+		return nil
+	}
+
+	return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrUnsupportedType)
 }

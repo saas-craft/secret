@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"testing"
@@ -227,6 +228,83 @@ func TestFormatter(t *testing.T) {
 	}
 }
 
+type stubTextUnmarshaler struct {
+	val string
+}
+
+func (u *stubTextUnmarshaler) UnmarshalText(text []byte) error {
+	u.val = string(text)
+	return nil
+}
+
+var errTextUnmarshal = errors.New("text unmarshal failed")
+
+type failingTextUnmarshaler struct {
+	val string
+}
+
+func (u *failingTextUnmarshaler) UnmarshalText([]byte) error {
+	return errTextUnmarshal
+}
+
+func TestUnmarshalText(t *testing.T) {
+	t.Run("string", func(t *testing.T) {
+		tests := map[string]struct {
+			input []byte
+			want  string
+		}{
+			"non-empty": {input: []byte("my-secret"), want: "my-secret"},
+			"empty":     {input: []byte{}, want: ""},
+			"nil":       {input: nil, want: ""},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[string]
+				if err := s.UnmarshalText(tc.input); err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %q, want %q", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("TextUnmarshaler success delegates to underlying type", func(t *testing.T) {
+		var s Value[stubTextUnmarshaler]
+		if err := s.UnmarshalText([]byte("delegated")); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := s.Reveal().val; got != "delegated" {
+			t.Errorf("Reveal().val = %q, want %q", got, "delegated")
+		}
+	})
+
+	t.Run("TextUnmarshaler error is propagated", func(t *testing.T) {
+		var s Value[failingTextUnmarshaler]
+		if err := s.UnmarshalText([]byte("anything")); !errors.Is(err, errTextUnmarshal) {
+			t.Fatalf("expected errTextUnmarshal, got %v", err)
+		}
+	})
+
+	t.Run("TextUnmarshaler value is not mutated on error", func(t *testing.T) {
+		s := Redact(failingTextUnmarshaler{val: "original"})
+		if err := s.UnmarshalText([]byte("anything")); !errors.Is(err, errTextUnmarshal) {
+			t.Fatalf("expected errTextUnmarshal, got %v", err)
+		}
+		if got := s.Reveal().val; got != "original" {
+			t.Errorf("value mutated on error path: got %q, want %q", got, "original")
+		}
+	})
+
+	t.Run("unsupported type returns ErrUnsupportedType", func(t *testing.T) {
+		var s Value[int]
+		if err := s.UnmarshalText([]byte("42")); !errors.Is(err, ErrUnsupportedType) {
+			t.Fatalf("want ErrUnsupportedType, got %v", err)
+		}
+	})
+}
+
 // Compile-time interface checks
 var (
 	_ fmt.Stringer             = Value[string]{}
@@ -237,4 +315,5 @@ var (
 	_ encoding.BinaryMarshaler = Value[string]{}
 	_ driver.Valuer            = Value[string]{}
 	_ slog.LogValuer           = Value[string]{}
+	_ encoding.TextUnmarshaler = &Value[string]{}
 )
