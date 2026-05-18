@@ -3,12 +3,16 @@ package secret
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
 )
 
 const redacted = "[REDACTED]"
 
 type String string
+
+var ErrUseOfRedacted = errors.New("call Reveal() to use this value")
 
 func (s String) Reveal() string {
 	return string(s)
@@ -27,17 +31,21 @@ func (s String) MarshalJSON() ([]byte, error) {
 }
 
 func (s String) MarshalText() ([]byte, error) {
-	return []byte(redacted), nil
+	return []byte(redacted), ErrUseOfRedacted
 }
 
 func (s String) MarshalBinary() ([]byte, error) {
-	return []byte(redacted), nil
+	return []byte(redacted), ErrUseOfRedacted
 }
 
 func (s String) Value() (driver.Value, error) {
-	return redacted, nil
+	return redacted, ErrUseOfRedacted
 }
 
 func (s String) LogValue() slog.Value {
 	return slog.StringValue(redacted)
+}
+
+func (s String) Format(f fmt.State, verb rune) {
+	fmt.Fprint(f, redacted)
 }

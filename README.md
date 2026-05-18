@@ -1,6 +1,6 @@
 # Secret
 
-Types that hide their value when rendered to text.
+Types that defensively hide their value when rendered to text.
 
 ```go
 var refreshTokenSecret = secret.String("my-secret")
@@ -12,7 +12,9 @@ fmt.Println(refreshTokenSecret.Reveal())
 // Output: my-secret
 ```
 
-Covers the Stringer, GoStringer, TextMarshaler, json.Marshaler, BinaryMarshaler, driver.Valuer and LogValuer interfaces.
+Covers the Stringer, GoStringer, Formatter, TextMarshaler, json.Marshaler, BinaryMarshaler, driver.Valuer and LogValuer interfaces. Returns an ErrUseOfRedacted error when possible.
+
+**Note**: easily circumvented with a cast eg. string(refreshTokenSecret).
 
 ## Installation
 
