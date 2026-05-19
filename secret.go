@@ -83,86 +83,73 @@ func (s Value[T]) Format(f fmt.State, verb rune) {
 
 // UnmarshalText implements encoding.TextUnmarshaler with a fallback for basic types.
 func (s *Value[T]) UnmarshalText(text []byte) error {
+	wrap := func(sentinel error) error {
+		return fmt.Errorf("secret.Value[%T]: %w", s.value, sentinel)
+	}
+
 	if u, ok := any(&s.value).(encoding.TextUnmarshaler); ok {
 		if err := u.UnmarshalText(text); err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+			return wrap(ErrParseFailed)
 		}
-
 		return nil
 	}
 
 	str := string(text)
 
-	switch p := any(&s.value).(type) {
-	case *time.Duration:
+	if p, ok := any(&s.value).(*time.Duration); ok {
 		v, err := time.ParseDuration(str)
 		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+			return wrap(ErrParseFailed)
 		}
-
 		*p = v
+		return nil
+	}
 
-	case *url.URL:
+	rv := reflect.ValueOf(&s.value).Elem()
+	switch rv.Kind() {
+	case reflect.String:
+		rv.SetString(str)
+
+	case reflect.Bool:
+		v, err := strconv.ParseBool(str)
+		if err != nil {
+			return wrap(ErrParseFailed)
+		}
+		rv.SetBool(v)
+
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v, err := strconv.ParseInt(str, 10, rv.Type().Bits())
+		if err != nil {
+			return wrap(ErrParseFailed)
+		}
+		rv.SetInt(v)
+
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		v, err := strconv.ParseUint(str, 10, rv.Type().Bits())
+		if err != nil {
+			return wrap(ErrParseFailed)
+		}
+		rv.SetUint(v)
+
+	case reflect.Float32, reflect.Float64:
+		v, err := strconv.ParseFloat(str, rv.Type().Bits())
+		if err != nil {
+			return wrap(ErrParseFailed)
+		}
+		rv.SetFloat(v)
+
+	case reflect.Struct:
+		if !rv.Type().ConvertibleTo(reflect.TypeFor[url.URL]()) {
+			return wrap(ErrUnsupportedType)
+		}
 		v, err := url.Parse(str)
 		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+			return wrap(ErrParseFailed)
 		}
-
-		*p = *v
+		rv.Set(reflect.ValueOf(*v).Convert(rv.Type()))
 
 	default:
-		rv := reflect.ValueOf(&s.value).Elem()
-		switch rv.Kind() {
-		case reflect.String:
-			rv.SetString(str)
-
-		case reflect.Bool:
-			v, err := strconv.ParseBool(str)
-			if err != nil {
-				return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-			}
-
-			rv.SetBool(v)
-
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			v, err := strconv.ParseInt(str, 10, rv.Type().Bits())
-			if err != nil {
-				return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-			}
-
-			rv.SetInt(v)
-
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			v, err := strconv.ParseUint(str, 10, rv.Type().Bits())
-			if err != nil {
-				return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-			}
-
-			rv.SetUint(v)
-
-		case reflect.Float32, reflect.Float64:
-			v, err := strconv.ParseFloat(str, rv.Type().Bits())
-			if err != nil {
-				return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-			}
-
-			rv.SetFloat(v)
-
-		case reflect.Struct:
-			if !rv.Type().ConvertibleTo(reflect.TypeFor[url.URL]()) {
-				return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrUnsupportedType)
-			}
-
-			v, err := url.Parse(str)
-			if err != nil {
-				return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-			}
-
-			rv.Set(reflect.ValueOf(*v).Convert(rv.Type()))
-
-		default:
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrUnsupportedType)
-		}
+		return wrap(ErrUnsupportedType)
 	}
 
 	return nil
