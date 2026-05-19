@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 )
 
 const redacted = "[REDACTED]"
@@ -75,7 +76,7 @@ func (s Value[T]) Format(f fmt.State, verb rune) {
 	fmt.Fprint(f, redacted)
 }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
+// UnmarshalText implements encoding.TextUnmarshaler with a fallback for basic types.
 func (s *Value[T]) UnmarshalText(text []byte) error {
 	if u, ok := any(&s.value).(encoding.TextUnmarshaler); ok {
 		if err := u.UnmarshalText(text); err != nil {
@@ -85,10 +86,119 @@ func (s *Value[T]) UnmarshalText(text []byte) error {
 		return nil
 	}
 
-	if p, ok := any(&s.value).(*string); ok {
-		*p = string(text)
-		return nil
+	str := string(text)
+
+	switch p := any(&s.value).(type) {
+	case *string:
+		*p = str
+
+	case *bool:
+		v, err := strconv.ParseBool(str)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = v
+
+	case *int:
+		v, err := strconv.ParseInt(str, 10, strconv.IntSize)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = int(v)
+
+	case *int8:
+		v, err := strconv.ParseInt(str, 10, 8)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = int8(v)
+
+	case *int16:
+		v, err := strconv.ParseInt(str, 10, 16)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = int16(v)
+
+	case *int32:
+		v, err := strconv.ParseInt(str, 10, 32)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = int32(v)
+
+	case *int64:
+		v, err := strconv.ParseInt(str, 10, 64)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = v
+
+	case *uint:
+		v, err := strconv.ParseUint(str, 10, strconv.IntSize)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = uint(v)
+
+	case *uint8:
+		v, err := strconv.ParseUint(str, 10, 8)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = uint8(v)
+
+	case *uint16:
+		v, err := strconv.ParseUint(str, 10, 16)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = uint16(v)
+
+	case *uint32:
+		v, err := strconv.ParseUint(str, 10, 32)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = uint32(v)
+
+	case *uint64:
+		v, err := strconv.ParseUint(str, 10, 64)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = v
+
+	case *float32:
+		v, err := strconv.ParseFloat(str, 32)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = float32(v)
+
+	case *float64:
+		v, err := strconv.ParseFloat(str, 64)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = v
+
+	default:
+		return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrUnsupportedType)
 	}
 
-	return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrUnsupportedType)
+	return nil
 }
