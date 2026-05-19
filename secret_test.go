@@ -14,31 +14,23 @@ import (
 	"time"
 )
 
-func ExampleRedact() {
+func Example() {
 	type config struct {
-		Name    Value[string]
-		Host    Value[url.URL]
+		Host    Value[string]
 		Port    Value[uint16]
 		Timeout Value[time.Duration]
 	}
 
-	parsedHost, _ := url.Parse("saascraft.com")
-
 	cfg := config{
-		Name:    Redact("secret"),
-		Host:    Redact(*parsedHost),
+		Host:    Redact("api.saascraft.com"),
 		Port:    Redact(uint16(9000)),
 		Timeout: Redact(5 * time.Second),
 	}
 
-	fmt.Printf("%v\n", cfg)
-	fmt.Printf("%v\n", cfg.Host.Reveal().Path)
-	fmt.Printf("%v\n", cfg.Port.Reveal())
-	fmt.Printf("%v\n", cfg.Timeout.Reveal())
-	// Output:{[REDACTED] [REDACTED] [REDACTED] [REDACTED]}
-	// saascraft.com
-	// 9000
-	// 5s
+	fmt.Printf("%+v\n", cfg)
+	fmt.Println("Revealed:", cfg.Host.Reveal(), cfg.Port.Reveal(), cfg.Timeout.Reveal())
+	// Output: {Host:[REDACTED] Port:[REDACTED] Timeout:[REDACTED]}
+	// Revealed: api.saascraft.com 9000 5s
 }
 
 func TestReveal(t *testing.T) {

@@ -27,29 +27,46 @@ package main
 
 import (
     "fmt"
-    "log/slog"
 
     "github.com/saas-craft/secret"
 )
 
-type Config struct {
-    Host  string
-    Token secret.Value[string]
+func main() {
+type config struct {
+    Host    Value[string]
+    Port    Value[uint16]
+    Timeout Value[time.Duration]
 }
 
-func main() {
-    cfg := Config{
-        Host:  "api.saascraft.com",
-        Token: secret.Redact("my-secret"),
-    }
+cfg := config{
+    Host:    Redact("api.saascraft.com"),
+    Port:    Redact(uint16(9000)),
+    Timeout: Redact(5 * time.Second),
+}
 
-    fmt.Printf("%+v\n", cfg)
-    // {Host:api.saascraft.com Token:[REDACTED]}
-
-    fmt.Println("authenticating with:", cfg.Token.Reveal())
-    // authenticating with: my-secret
+fmt.Printf("%+v\n", cfg)
+fmt.Println("Revealed:", cfg.Host.Reveal(), cfg.Port.Reveal(), cfg.Timeout.Reveal())
+// Output: {Host:[REDACTED] Port:[REDACTED] Timeout:[REDACTED]}
+// Revealed: api.saascraft.com 9000 5s
 }
 ```
+
+## Supported Types
+
+| Go Type | Example value |
+| --- | --- |
+| `string` | `hello` |
+| `bool` | `true`, `false`, `1`, `0` |
+| `int`, `int8`, `int16`, `int32`, `int64` | `-42` |
+| `uint`, `uint8`, `uint16`, `uint32`, `uint64` | `42` |
+| `float32`, `float64` | `3.14` |
+| `time.Duration` | `1h30m`, `500ms`, `2s` |
+| `url.URL` | `https://saascraft.com/v1` |
+| `encoding.TextUnmarshaler` (e.g. `slog.Level`) | `debug` |
+
+## Works well with
+
+- SaasCraft [TypedEnv](https://pkg.go.dev/github.com/saas-craft/typedenv), for type-safe environment configuration
 
 ## License
 
