@@ -14,6 +14,33 @@ import (
 	"time"
 )
 
+func ExampleRedact() {
+	type config struct {
+		Name    Value[string]
+		Host    Value[url.URL]
+		Port    Value[uint16]
+		Timeout Value[time.Duration]
+	}
+
+	parsedHost, _ := url.Parse("saascraft.com")
+
+	cfg := config{
+		Name:    Redact("secret"),
+		Host:    Redact(*parsedHost),
+		Port:    Redact(uint16(9000)),
+		Timeout: Redact(5 * time.Second),
+	}
+
+	fmt.Printf("%v\n", cfg)
+	fmt.Printf("%v\n", cfg.Host.Reveal().Path)
+	fmt.Printf("%v\n", cfg.Port.Reveal())
+	fmt.Printf("%v\n", cfg.Timeout.Reveal())
+	// Output:{[REDACTED] [REDACTED] [REDACTED] [REDACTED]}
+	// saascraft.com
+	// 9000
+	// 5s
+}
+
 func TestReveal(t *testing.T) {
 	tests := map[string]struct {
 		secret string

@@ -19,14 +19,16 @@ type Value[T any] struct {
 	value T
 }
 
-// ErrUseOfRedacted is returned by serialization methods; call Reveal before serializing or persisting.
-var ErrUseOfRedacted = errors.New("call Reveal() to use this value")
+var (
+	// ErrUseOfRedacted is returned by serialization methods; call Reveal before serializing or persisting.
+	ErrUseOfRedacted = errors.New("call Reveal() to use this value")
 
-// ErrUnsupportedType is returned by UnmarshalText when T is neither string nor encoding.TextUnmarshaler.
-var ErrUnsupportedType = errors.New("type cannot unmarshal from text")
+	// ErrUnsupportedType is returned by UnmarshalText when T is neither string nor encoding.TextUnmarshaler.
+	ErrUnsupportedType = errors.New("type cannot unmarshal from text")
 
-// ErrParseFailed is returned by UnmarshalText when the underlying type's UnmarshalText fails.
-var ErrParseFailed = errors.New("failed to parse value")
+	// ErrParseFailed is returned by UnmarshalText when the underlying type's UnmarshalText fails.
+	ErrParseFailed = errors.New("failed to parse value")
+)
 
 // Redact returns a Value[T] that hides v from default formatting, logging, and serialization.
 func Redact[T any](v T) Value[T] {
