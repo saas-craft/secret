@@ -1,4 +1,4 @@
-# Secret
+# Secret [![CI](https://github.com/saas-craft/secret/actions/workflows/ci.yml/badge.svg)](https://github.com/saas-craft/secret/actions/workflows/ci.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/saas-craft/secret)](https://goreportcard.com/report/github.com/saas-craft/secret) [![Go Reference](https://pkg.go.dev/badge/github.com/saas-craft/secret.svg)](https://pkg.go.dev/github.com/saas-craft/secret)
 
 A redacting wrapper that hides sensitive values from default formatting, logging, and serialization.
 
