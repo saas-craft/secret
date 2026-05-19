@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"time"
 )
 
 const redacted = "[REDACTED]"
@@ -190,6 +191,14 @@ func (s *Value[T]) UnmarshalText(text []byte) error {
 
 	case *float64:
 		v, err := strconv.ParseFloat(str, 64)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = v
+
+	case *time.Duration:
+		v, err := time.ParseDuration(str)
 		if err != nil {
 			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
 		}

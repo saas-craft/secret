@@ -10,6 +10,7 @@ import (
 	"math"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func TestReveal(t *testing.T) {
@@ -823,6 +824,57 @@ func TestUnmarshalText(t *testing.T) {
 				t.Errorf("Reveal() = %v, want NaN", s.Reveal())
 			}
 		})
+	})
+
+	t.Run("time.Duration", func(t *testing.T) {
+		tests := map[string]struct {
+			input   []byte
+			want    time.Duration
+			wantErr bool
+		}{
+			"zero":         {input: []byte("0s"), want: 0},
+			"seconds":      {input: []byte("30s"), want: 30 * time.Second},
+			"minutes":      {input: []byte("5m"), want: 5 * time.Minute},
+			"hours":        {input: []byte("2h"), want: 2 * time.Hour},
+			"compound":     {input: []byte("1h30m"), want: time.Hour + 30*time.Minute},
+			"milliseconds": {input: []byte("500ms"), want: 500 * time.Millisecond},
+			"microseconds": {input: []byte("100us"), want: 100 * time.Microsecond},
+			"nanoseconds":  {input: []byte("1ns"), want: time.Nanosecond},
+			"negative":     {input: []byte("-1h"), want: -time.Hour},
+			"fractional":   {input: []byte("1.5s"), want: 1500 * time.Millisecond},
+			"non-duration": {input: []byte("abc"), wantErr: true},
+			"bare number":  {input: []byte("42"), wantErr: true},
+			"empty":        {input: []byte(""), wantErr: true},
+		}
+
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[time.Duration]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("time.Duration value not mutated on error", func(t *testing.T) {
+		s := Redact(5 * time.Second)
+		if err := s.UnmarshalText([]byte("abc")); !errors.Is(err, ErrParseFailed) {
+			t.Fatalf("expected ErrParseFailed, got %v", err)
+		}
+		if got := s.Reveal(); got != 5*time.Second {
+			t.Errorf("value mutated on error: got %v, want %v", got, 5*time.Second)
+		}
 	})
 
 	t.Run("float64", func(t *testing.T) {
