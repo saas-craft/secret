@@ -27,27 +27,28 @@ package main
 
 import (
     "fmt"
+    "time"
 
     "github.com/saas-craft/secret"
 )
 
 func main() {
-type config struct {
-    Host    Value[string]
-    Port    Value[uint16]
-    Timeout Value[time.Duration]
-}
+    type config struct {
+        Host    secret.Value[string]
+        Port    secret.Value[uint16]
+        Timeout secret.Value[time.Duration]
+    }
 
-cfg := config{
-    Host:    Redact("api.saascraft.com"),
-    Port:    Redact(uint16(9000)),
-    Timeout: Redact(5 * time.Second),
-}
+    cfg := config{
+        Host:    secret.Redact("api.saascraft.com"),
+        Port:    secret.Redact(uint16(9000)),
+        Timeout: secret.Redact(5 * time.Second),
+    }
 
-fmt.Printf("%+v\n", cfg)
-fmt.Println("Revealed:", cfg.Host.Reveal(), cfg.Port.Reveal(), cfg.Timeout.Reveal())
-// Output: {Host:[REDACTED] Port:[REDACTED] Timeout:[REDACTED]}
-// Revealed: api.saascraft.com 9000 5s
+    fmt.Printf("%+v\n", cfg)
+    fmt.Println("Revealed:", cfg.Host.Reveal(), cfg.Port.Reveal(), cfg.Timeout.Reveal())
+    // Output: {Host:[REDACTED] Port:[REDACTED] Timeout:[REDACTED]}
+    // Revealed: api.saascraft.com 9000 5s
 }
 ```
 
@@ -67,6 +68,10 @@ fmt.Println("Revealed:", cfg.Host.Reveal(), cfg.Port.Reveal(), cfg.Timeout.Revea
 ## Works well with
 
 - SaasCraft [TypedEnv](https://pkg.go.dev/github.com/saas-craft/typedenv), for type-safe environment configuration
+
+## Constraints
+
+- No support for named time.Duration wrapper types, which can't be distinguished from integers
 
 ## License
 

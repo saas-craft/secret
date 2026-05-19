@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"reflect"
 	"strconv"
 	"time"
 )
@@ -23,10 +24,10 @@ var (
 	// ErrUseOfRedacted is returned by serialization methods; call Reveal before serializing or persisting.
 	ErrUseOfRedacted = errors.New("call Reveal() to use this value")
 
-	// ErrUnsupportedType is returned by UnmarshalText when T is neither string nor encoding.TextUnmarshaler.
+	// ErrUnsupportedType is returned by UnmarshalText when T is not a supported type.
 	ErrUnsupportedType = errors.New("type cannot unmarshal from text")
 
-	// ErrParseFailed is returned by UnmarshalText when the underlying type's UnmarshalText fails.
+	// ErrParseFailed is returned by UnmarshalText when the underlying type's parsing fails.
 	ErrParseFailed = errors.New("failed to parse value")
 )
 
@@ -93,113 +94,6 @@ func (s *Value[T]) UnmarshalText(text []byte) error {
 	str := string(text)
 
 	switch p := any(&s.value).(type) {
-	case *string:
-		*p = str
-
-	case *bool:
-		v, err := strconv.ParseBool(str)
-		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-		}
-
-		*p = v
-
-	case *int:
-		v, err := strconv.ParseInt(str, 10, strconv.IntSize)
-		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-		}
-
-		*p = int(v)
-
-	case *int8:
-		v, err := strconv.ParseInt(str, 10, 8)
-		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-		}
-
-		*p = int8(v)
-
-	case *int16:
-		v, err := strconv.ParseInt(str, 10, 16)
-		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-		}
-
-		*p = int16(v)
-
-	case *int32:
-		v, err := strconv.ParseInt(str, 10, 32)
-		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-		}
-
-		*p = int32(v)
-
-	case *int64:
-		v, err := strconv.ParseInt(str, 10, 64)
-		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-		}
-
-		*p = v
-
-	case *uint:
-		v, err := strconv.ParseUint(str, 10, strconv.IntSize)
-		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-		}
-
-		*p = uint(v)
-
-	case *uint8:
-		v, err := strconv.ParseUint(str, 10, 8)
-		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-		}
-
-		*p = uint8(v)
-
-	case *uint16:
-		v, err := strconv.ParseUint(str, 10, 16)
-		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-		}
-
-		*p = uint16(v)
-
-	case *uint32:
-		v, err := strconv.ParseUint(str, 10, 32)
-		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-		}
-
-		*p = uint32(v)
-
-	case *uint64:
-		v, err := strconv.ParseUint(str, 10, 64)
-		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-		}
-
-		*p = v
-
-	case *float32:
-		v, err := strconv.ParseFloat(str, 32)
-		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-		}
-
-		*p = float32(v)
-
-	case *float64:
-		v, err := strconv.ParseFloat(str, 64)
-		if err != nil {
-			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
-		}
-
-		*p = v
-
 	case *time.Duration:
 		v, err := time.ParseDuration(str)
 		if err != nil {
@@ -217,7 +111,58 @@ func (s *Value[T]) UnmarshalText(text []byte) error {
 		*p = *v
 
 	default:
-		return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrUnsupportedType)
+		rv := reflect.ValueOf(&s.value).Elem()
+		switch rv.Kind() {
+		case reflect.String:
+			rv.SetString(str)
+
+		case reflect.Bool:
+			v, err := strconv.ParseBool(str)
+			if err != nil {
+				return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+			}
+
+			rv.SetBool(v)
+
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			v, err := strconv.ParseInt(str, 10, rv.Type().Bits())
+			if err != nil {
+				return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+			}
+
+			rv.SetInt(v)
+
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			v, err := strconv.ParseUint(str, 10, rv.Type().Bits())
+			if err != nil {
+				return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+			}
+
+			rv.SetUint(v)
+
+		case reflect.Float32, reflect.Float64:
+			v, err := strconv.ParseFloat(str, rv.Type().Bits())
+			if err != nil {
+				return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+			}
+
+			rv.SetFloat(v)
+
+		case reflect.Struct:
+			if !rv.Type().ConvertibleTo(reflect.TypeFor[url.URL]()) {
+				return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrUnsupportedType)
+			}
+
+			v, err := url.Parse(str)
+			if err != nil {
+				return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+			}
+
+			rv.Set(reflect.ValueOf(*v).Convert(rv.Type()))
+
+		default:
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrUnsupportedType)
+		}
 	}
 
 	return nil

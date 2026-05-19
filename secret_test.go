@@ -363,9 +363,17 @@ func TestUnmarshalText(t *testing.T) {
 		}
 	})
 
-	t.Run("unsupported type returns ErrUnsupportedType", func(t *testing.T) {
+	t.Run("unsupported struct type returns ErrUnsupportedType", func(t *testing.T) {
 		type opaque struct{ val string }
 		var s Value[opaque]
+		if err := s.UnmarshalText([]byte("anything")); !errors.Is(err, ErrUnsupportedType) {
+			t.Fatalf("want ErrUnsupportedType, got %v", err)
+		}
+	})
+
+	t.Run("unsupported kind returns ErrUnsupportedType", func(t *testing.T) {
+		type mySlice []byte
+		var s Value[mySlice]
 		if err := s.UnmarshalText([]byte("anything")); !errors.Is(err, ErrUnsupportedType) {
 			t.Fatalf("want ErrUnsupportedType, got %v", err)
 		}
@@ -990,6 +998,566 @@ func TestUnmarshalText(t *testing.T) {
 			}
 			if !math.IsNaN(s.Reveal()) {
 				t.Errorf("Reveal() = %v, want NaN", s.Reveal())
+			}
+		})
+	})
+
+	t.Run("named string type", func(t *testing.T) {
+		type myString string
+		tests := map[string]struct {
+			input []byte
+			want  myString
+		}{
+			"non-empty": {input: []byte("hello"), want: "hello"},
+			"empty":     {input: []byte{}, want: ""},
+			"nil":       {input: nil, want: ""},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myString]
+				if err := s.UnmarshalText(tc.input); err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %q, want %q", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("named bool type", func(t *testing.T) {
+		type myBool bool
+		tests := map[string]struct {
+			input   []byte
+			want    myBool
+			wantErr bool
+		}{
+			"true":    {input: []byte("true"), want: true},
+			"false":   {input: []byte("false"), want: false},
+			"1":       {input: []byte("1"), want: true},
+			"0":       {input: []byte("0"), want: false},
+			"invalid": {input: []byte("yes"), wantErr: true},
+			"empty":   {input: []byte(""), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myBool]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+		t.Run("value not mutated on error", func(t *testing.T) {
+			s := Redact(myBool(true))
+			if err := s.UnmarshalText([]byte("invalid")); !errors.Is(err, ErrParseFailed) {
+				t.Fatalf("expected ErrParseFailed, got %v", err)
+			}
+			if got := s.Reveal(); got != true {
+				t.Errorf("value mutated on error: got %v, want true", got)
+			}
+		})
+	})
+
+	t.Run("named int type", func(t *testing.T) {
+		type myInt int
+		tests := map[string]struct {
+			input   []byte
+			want    myInt
+			wantErr bool
+		}{
+			"zero":        {input: []byte("0"), want: 0},
+			"positive":    {input: []byte("42"), want: 42},
+			"negative":    {input: []byte("-1"), want: -1},
+			"non-numeric": {input: []byte("abc"), wantErr: true},
+			"empty":       {input: []byte(""), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myInt]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+		t.Run("value not mutated on error", func(t *testing.T) {
+			s := Redact(myInt(99))
+			if err := s.UnmarshalText([]byte("bad")); !errors.Is(err, ErrParseFailed) {
+				t.Fatalf("expected ErrParseFailed, got %v", err)
+			}
+			if got := s.Reveal(); got != 99 {
+				t.Errorf("value mutated on error: got %v, want 99", got)
+			}
+		})
+	})
+
+	t.Run("named int8 type", func(t *testing.T) {
+		type myInt8 int8
+		tests := map[string]struct {
+			input   []byte
+			want    myInt8
+			wantErr bool
+		}{
+			"zero":     {input: []byte("0"), want: 0},
+			"max":      {input: []byte("127"), want: 127},
+			"min":      {input: []byte("-128"), want: -128},
+			"overflow": {input: []byte("128"), wantErr: true},
+			"empty":    {input: []byte(""), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myInt8]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("named int16 type", func(t *testing.T) {
+		type myInt16 int16
+		tests := map[string]struct {
+			input   []byte
+			want    myInt16
+			wantErr bool
+		}{
+			"zero":     {input: []byte("0"), want: 0},
+			"max":      {input: []byte("32767"), want: 32767},
+			"min":      {input: []byte("-32768"), want: -32768},
+			"overflow": {input: []byte("32768"), wantErr: true},
+			"empty":    {input: []byte(""), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myInt16]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("named int32 type", func(t *testing.T) {
+		type myInt32 int32
+		tests := map[string]struct {
+			input   []byte
+			want    myInt32
+			wantErr bool
+		}{
+			"zero":     {input: []byte("0"), want: 0},
+			"max":      {input: []byte("2147483647"), want: 2147483647},
+			"min":      {input: []byte("-2147483648"), want: -2147483648},
+			"overflow": {input: []byte("2147483648"), wantErr: true},
+			"empty":    {input: []byte(""), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myInt32]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("named int64 type", func(t *testing.T) {
+		type myInt64 int64
+		tests := map[string]struct {
+			input   []byte
+			want    myInt64
+			wantErr bool
+		}{
+			"zero":     {input: []byte("0"), want: 0},
+			"max":      {input: []byte("9223372036854775807"), want: 9223372036854775807},
+			"min":      {input: []byte("-9223372036854775808"), want: -9223372036854775808},
+			"overflow": {input: []byte("9223372036854775808"), wantErr: true},
+			"empty":    {input: []byte(""), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myInt64]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("named uint type", func(t *testing.T) {
+		type myUint uint
+		tests := map[string]struct {
+			input   []byte
+			want    myUint
+			wantErr bool
+		}{
+			"zero":     {input: []byte("0"), want: 0},
+			"positive": {input: []byte("42"), want: 42},
+			"negative": {input: []byte("-1"), wantErr: true},
+			"empty":    {input: []byte(""), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myUint]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+		t.Run("value not mutated on error", func(t *testing.T) {
+			s := Redact(myUint(7))
+			if err := s.UnmarshalText([]byte("-1")); !errors.Is(err, ErrParseFailed) {
+				t.Fatalf("expected ErrParseFailed, got %v", err)
+			}
+			if got := s.Reveal(); got != 7 {
+				t.Errorf("value mutated on error: got %v, want 7", got)
+			}
+		})
+	})
+
+	t.Run("named uint8 type", func(t *testing.T) {
+		type myUint8 uint8
+		tests := map[string]struct {
+			input   []byte
+			want    myUint8
+			wantErr bool
+		}{
+			"zero":     {input: []byte("0"), want: 0},
+			"max":      {input: []byte("255"), want: 255},
+			"overflow": {input: []byte("256"), wantErr: true},
+			"negative": {input: []byte("-1"), wantErr: true},
+			"empty":    {input: []byte(""), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myUint8]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("named uint16 type", func(t *testing.T) {
+		type myUint16 uint16
+		tests := map[string]struct {
+			input   []byte
+			want    myUint16
+			wantErr bool
+		}{
+			"zero":     {input: []byte("0"), want: 0},
+			"max":      {input: []byte("65535"), want: 65535},
+			"overflow": {input: []byte("65536"), wantErr: true},
+			"negative": {input: []byte("-1"), wantErr: true},
+			"empty":    {input: []byte(""), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myUint16]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("named uint32 type", func(t *testing.T) {
+		type myUint32 uint32
+		tests := map[string]struct {
+			input   []byte
+			want    myUint32
+			wantErr bool
+		}{
+			"zero":     {input: []byte("0"), want: 0},
+			"max":      {input: []byte("4294967295"), want: 4294967295},
+			"overflow": {input: []byte("4294967296"), wantErr: true},
+			"negative": {input: []byte("-1"), wantErr: true},
+			"empty":    {input: []byte(""), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myUint32]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("named uint64 type", func(t *testing.T) {
+		type myUint64 uint64
+		tests := map[string]struct {
+			input   []byte
+			want    myUint64
+			wantErr bool
+		}{
+			"zero":     {input: []byte("0"), want: 0},
+			"max":      {input: []byte("18446744073709551615"), want: 18446744073709551615},
+			"overflow": {input: []byte("18446744073709551616"), wantErr: true},
+			"negative": {input: []byte("-1"), wantErr: true},
+			"empty":    {input: []byte(""), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myUint64]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("named float32 type", func(t *testing.T) {
+		type myFloat32 float32
+		tests := map[string]struct {
+			input   []byte
+			want    myFloat32
+			wantErr bool
+		}{
+			"zero":        {input: []byte("0"), want: 0},
+			"positive":    {input: []byte("1.5"), want: 1.5},
+			"negative":    {input: []byte("-1.5"), want: -1.5},
+			"max":         {input: []byte(strconv.FormatFloat(math.MaxFloat32, 'g', -1, 32)), want: math.MaxFloat32},
+			"overflow":    {input: []byte("3.5e38"), wantErr: true},
+			"non-numeric": {input: []byte("abc"), wantErr: true},
+			"empty":       {input: []byte(""), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myFloat32]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+		t.Run("value not mutated on error", func(t *testing.T) {
+			s := Redact(myFloat32(3.14))
+			if err := s.UnmarshalText([]byte("bad")); !errors.Is(err, ErrParseFailed) {
+				t.Fatalf("expected ErrParseFailed, got %v", err)
+			}
+			if got := s.Reveal(); got != 3.14 {
+				t.Errorf("value mutated on error: got %v, want 3.14", got)
+			}
+		})
+	})
+
+	t.Run("named float64 type", func(t *testing.T) {
+		type myFloat64 float64
+		tests := map[string]struct {
+			input   []byte
+			want    myFloat64
+			wantErr bool
+		}{
+			"zero":              {input: []byte("0"), want: 0},
+			"positive":          {input: []byte("1.5"), want: 1.5},
+			"negative":          {input: []byte("-1.5"), want: -1.5},
+			"max":               {input: []byte(strconv.FormatFloat(math.MaxFloat64, 'g', -1, 64)), want: math.MaxFloat64},
+			"positive infinity": {input: []byte("+Inf"), want: myFloat64(math.Inf(1))},
+			"negative infinity": {input: []byte("-Inf"), want: myFloat64(math.Inf(-1))},
+			"overflow":          {input: []byte("2e308"), wantErr: true},
+			"non-numeric":       {input: []byte("abc"), wantErr: true},
+			"empty":             {input: []byte(""), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myFloat64]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got := s.Reveal(); got != tc.want {
+					t.Errorf("Reveal() = %v, want %v", got, tc.want)
+				}
+			})
+		}
+		t.Run("NaN", func(t *testing.T) {
+			var s Value[myFloat64]
+			if err := s.UnmarshalText([]byte("NaN")); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !math.IsNaN(float64(s.Reveal())) {
+				t.Errorf("Reveal() = %v, want NaN", s.Reveal())
+			}
+		})
+		t.Run("value not mutated on error", func(t *testing.T) {
+			s := Redact(myFloat64(2.71))
+			if err := s.UnmarshalText([]byte("bad")); !errors.Is(err, ErrParseFailed) {
+				t.Fatalf("expected ErrParseFailed, got %v", err)
+			}
+			if got := s.Reveal(); got != 2.71 {
+				t.Errorf("value mutated on error: got %v, want 2.71", got)
+			}
+		})
+	})
+
+	t.Run("named url.URL type", func(t *testing.T) {
+		type myURL url.URL
+		tests := map[string]struct {
+			input   []byte
+			want    string
+			wantErr bool
+		}{
+			"absolute URL":           {input: []byte("https://example.com"), want: "https://example.com"},
+			"with path and query":    {input: []byte("https://example.com/path?q=1"), want: "https://example.com/path?q=1"},
+			"with fragment":          {input: []byte("https://example.com/path#frag"), want: "https://example.com/path#frag"},
+			"with userinfo and port": {input: []byte("http://user:pass@host:8080/path"), want: "http://user:pass@host:8080/path"},
+			"relative path":          {input: []byte("/relative/path"), want: "/relative/path"},
+			"empty":                  {input: []byte(""), want: ""},
+			"invalid percent":        {input: []byte("%zz"), wantErr: true},
+			"malformed IPv6":         {input: []byte("http://[::1"), wantErr: true},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[myURL]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				got := url.URL(s.Reveal())
+				if got.String() != tc.want {
+					t.Errorf("Reveal().String() = %q, want %q", got.String(), tc.want)
+				}
+			})
+		}
+		t.Run("value not mutated on error", func(t *testing.T) {
+			original, _ := url.Parse("https://original.com")
+			s := Redact(myURL(*original))
+			if err := s.UnmarshalText([]byte("http://[::1")); !errors.Is(err, ErrParseFailed) {
+				t.Fatalf("expected ErrParseFailed, got %v", err)
+			}
+			got := url.URL(s.Reveal())
+			if got.String() != "https://original.com" {
+				t.Errorf("value mutated on error: got %q, want %q", got.String(), "https://original.com")
 			}
 		})
 	})
