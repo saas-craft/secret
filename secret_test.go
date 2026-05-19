@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net/url"
 	"strconv"
 	"testing"
 	"time"
@@ -874,6 +875,55 @@ func TestUnmarshalText(t *testing.T) {
 		}
 		if got := s.Reveal(); got != 5*time.Second {
 			t.Errorf("value mutated on error: got %v, want %v", got, 5*time.Second)
+		}
+	})
+
+	t.Run("url.URL", func(t *testing.T) {
+		tests := map[string]struct {
+			input   []byte
+			want    string
+			wantErr bool
+		}{
+			"absolute URL":           {input: []byte("https://example.com"), want: "https://example.com"},
+			"with path and query":    {input: []byte("https://example.com/path?q=1"), want: "https://example.com/path?q=1"},
+			"with fragment":          {input: []byte("https://example.com/path#frag"), want: "https://example.com/path#frag"},
+			"with userinfo and port": {input: []byte("http://user:pass@host:8080/path"), want: "http://user:pass@host:8080/path"},
+			"relative path":          {input: []byte("/relative/path"), want: "/relative/path"},
+			"empty":                  {input: []byte(""), want: ""},
+			"invalid percent":        {input: []byte("%zz"), wantErr: true},
+			"malformed IPv6":         {input: []byte("http://[::1"), wantErr: true},
+		}
+
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var s Value[url.URL]
+				err := s.UnmarshalText(tc.input)
+				if tc.wantErr {
+					if !errors.Is(err, ErrParseFailed) {
+						t.Fatalf("want ErrParseFailed, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				got := s.Reveal()
+				if got.String() != tc.want {
+					t.Errorf("Reveal().String() = %q, want %q", got.String(), tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("url.URL value not mutated on error", func(t *testing.T) {
+		original, _ := url.Parse("https://original.com")
+		s := Redact(*original)
+		if err := s.UnmarshalText([]byte("http://[::1")); !errors.Is(err, ErrParseFailed) {
+			t.Fatalf("expected ErrParseFailed, got %v", err)
+		}
+		got := s.Reveal()
+		if got.String() != "https://original.com" {
+			t.Errorf("value mutated on error: got %q, want %q", got.String(), "https://original.com")
 		}
 	})
 

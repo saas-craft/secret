@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -204,6 +205,14 @@ func (s *Value[T]) UnmarshalText(text []byte) error {
 		}
 
 		*p = v
+
+	case *url.URL:
+		v, err := url.Parse(str)
+		if err != nil {
+			return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrParseFailed)
+		}
+
+		*p = *v
 
 	default:
 		return fmt.Errorf("secret.Value[%T]: %w", s.value, ErrUnsupportedType)
