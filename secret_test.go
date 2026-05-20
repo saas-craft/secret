@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/saas-craft/typedenv"
 )
 
 func Example() {
@@ -1015,6 +1017,42 @@ func TestUnmarshalText(t *testing.T) {
 				t.Errorf("value mutated on error: got %q, want %q", got.String(), "https://original.com")
 			}
 		})
+	})
+}
+
+func TestTypedenvIntegration(t *testing.T) {
+	type config struct {
+		Host    Value[string]        `env:"HOST"`
+		Port    Value[uint16]        `env:"PORT"`
+		Timeout Value[time.Duration] `env:"TIMEOUT"`
+	}
+
+	t.Setenv("HOST", "api.saascraft.com")
+	t.Setenv("PORT", "9000")
+	t.Setenv("TIMEOUT", "5s")
+
+	cfg, err := typedenv.Load[config]()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	t.Run("values are revealed correctly", func(t *testing.T) {
+		if got := cfg.Host.Reveal(); got != "api.saascraft.com" {
+			t.Errorf("Host.Reveal() = %q, want %q", got, "api.saascraft.com")
+		}
+		if got := cfg.Port.Reveal(); got != uint16(9000) {
+			t.Errorf("Port.Reveal() = %v, want %v", got, uint16(9000))
+		}
+		if got := cfg.Timeout.Reveal(); got != 5*time.Second {
+			t.Errorf("Timeout.Reveal() = %v, want %v", got, 5*time.Second)
+		}
+	})
+
+	t.Run("values are redacted when formatted", func(t *testing.T) {
+		want := "{Host:[REDACTED] Port:[REDACTED] Timeout:[REDACTED]}"
+		if got := fmt.Sprintf("%+v", cfg); got != want {
+			t.Errorf("Sprintf(%%+v) = %q, want %q", got, want)
+		}
 	})
 }
 
